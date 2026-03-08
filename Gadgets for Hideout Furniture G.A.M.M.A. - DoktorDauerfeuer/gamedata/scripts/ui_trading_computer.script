@@ -1,0 +1,256 @@
+local GUI = nil
+local gc = game.translate_string
+local _unpack = unpack or table.unpack
+local COLOR_DEFAULT = GetARGB(255, 220, 220, 220)
+local COLOR_MEDIC = GetARGB(255, 255, 90, 90)
+local COLOR_SCIENTIST = GetARGB(255, 100, 170, 255)
+local COLOR_TECHNICIAN = GetARGB(255, 255, 220, 70)
+local COLOR_BARMAN = GetARGB(255, 90, 255, 90)
+
+local function localized_string(id, fallback)
+    local ok, value = pcall(function()
+        return gc(id)
+    end)
+    if ok and value and value ~= "" then
+        return value
+    end
+    return fallback or id
+end
+
+local function format_localized(id, default_text, ...)
+    local template = localized_string(id, default_text)
+    local args = { ... }
+    local ok, result = pcall(function()
+        return string.format(template, _unpack(args))
+    end)
+    if ok then
+        return result
+    end
+
+    local parts = {}
+    for i = 1, #args do
+        parts[i] = tostring(args[i])
+    end
+    return default_text .. table.concat(parts, ", ")
+end
+local function role_to_color(role)
+    role = string.lower(tostring(role or ""))
+    if role == "medic" then
+        return COLOR_MEDIC
+    end
+    if role == "scientist" then
+        return COLOR_SCIENTIST
+    end
+    if role == "technician" then
+        return COLOR_TECHNICIAN
+    end
+    if role == "barman" then
+        return COLOR_BARMAN
+    end
+    return COLOR_DEFAULT
+end
+
+local function role_to_localized_name(role)
+    role = string.lower(tostring(role or ""))
+    if role == "medic" then
+        return localized_string("st_trading_computer_role_medic", "Medic")
+    end
+    if role == "scientist" then
+        return localized_string("st_trading_computer_role_scientist", "Scientist")
+    end
+    if role == "technician" then
+        return localized_string("st_trading_computer_role_technician", "Technician")
+    end
+    if role == "barman" then
+        return localized_string("st_trading_computer_role_barman", "Barman")
+    end
+    return localized_string("st_trading_computer_role_trader", "Trader")
+end
+
+class "trader_list_item" (CUIListBoxItem)
+
+function trader_list_item:__init(height) super(height)
+    self.trader_id = nil
+    self:SetTextColor(COLOR_DEFAULT)
+
+    self.txt = self:GetTextItem()
+    self.txt:SetFont(GetFontLetterica16Russian())
+    self.txt:SetEllipsis(true)
+end
+
+function trader_list_item:__finalize()
+end
+
+class "UITradingComputer" (CUIScriptWnd)
+
+function UITradingComputer:__init() super()
+    self.entries = {}
+    self:InitControls()
+    self:InitCallbacks()
+end
+
+function UITradingComputer:__finalize()
+    GUI = nil
+end
+
+function UITradingComputer:InitControls()
+    self:SetWndRect(Frect():set(0, 0, 1024, 768))
+    self:SetAutoDelete(true)
+
+    local xml = CScriptXmlInit()
+    xml:ParseFile("ui_trading_computer_dialog.xml")
+
+    self.back = xml:InitFrame("background", self)
+    self.title = xml:InitTextWnd("title", self.back)
+    self.hint = xml:InitTextWnd("hint", self.back)
+    self.count = xml:InitTextWnd("count", self.back)
+    xml:InitFrame("list_frame", self.back)
+
+    self.list_box = xml:InitListBox("list", self.back)
+    self.list_box:ShowSelectedItem(true)
+    self:Register(self.list_box, "list_window")
+
+    self.btn_open = xml:Init3tButton("btn_open", self.back)
+    self:Register(self.btn_open, "btn_open")
+
+    self.btn_refresh = xml:Init3tButton("btn_refresh", self.back)
+    self:Register(self.btn_refresh, "btn_refresh")
+
+    self.btn_close = xml:Init3tButton("btn_close", self.back)
+    self:Register(self.btn_close, "btn_close")
+
+    self.title:SetText(localized_string("st_trading_computer_title", "Trading Computer"))
+    self.hint:SetText(localized_string("st_trading_computer_hint_select", "Select a trader and click Trade."))
+    pcall(function() self.btn_open:SetText(localized_string("st_trading_computer_btn_trade", "Trade")) end)
+    pcall(function() self.btn_refresh:SetText(localized_string("st_trading_computer_btn_refresh", "Refresh")) end)
+    pcall(function() self.btn_close:SetText(localized_string("st_trading_computer_btn_close", "Close")) end)
+end
+
+function UITradingComputer:InitCallbacks()
+    self:AddCallback("btn_open", ui_events.BUTTON_CLICKED, self.OpenSelected, self)
+    self:AddCallback("btn_refresh", ui_events.BUTTON_CLICKED, self.RefreshList, self)
+    self:AddCallback("btn_close", ui_events.BUTTON_CLICKED, self.Close, self)
+
+    self:AddCallback("list_window", ui_events.LIST_ITEM_CLICKED, self.OnListItemClicked, self)
+    self:AddCallback("list_window", ui_events.WINDOW_LBUTTON_DB_CLICK, self.OnListItemDbClicked, self)
+end
+
+function UITradingComputer:OnListItemClicked()
+    local item = self.list_box:GetSelectedItem()
+    if item and item.trader_id and bind_trading_computer and bind_trading_computer.set_last_selected_trader then
+        bind_trading_computer.set_last_selected_trader(self.object_id, item.trader_id)
+    end
+end
+
+function UITradingComputer:OnListItemDbClicked()
+    self:OpenSelected()
+end
+
+function UITradingComputer:AddEntry(index, entry)
+    local item = trader_list_item(22)
+    item:SetWndSize(vector2():set(460, 22))
+    item.trader_id = entry.id
+
+    local meters = math.floor((tonumber(entry.distance) or 0) + 0.5)
+    local role = role_to_localized_name(entry.role)
+    local color = role_to_color(entry.role)
+    local txt = format_localized(
+        "st_trading_computer_entry_format",
+        string.format("%d. [%s] %s [%dm]", index, role, tostring(entry.name or "Trader"), meters),
+        index,
+        role,
+        tostring(entry.name or "Trader"),
+        meters
+    )
+    item.txt:SetWndPos(vector2():set(0, 0))
+    item.txt:SetWndSize(vector2():set(460, 22))
+    item:SetTextColor(color)
+    pcall(function() item.txt:SetTextColor(color) end)
+    item.txt:SetText(txt)
+
+    self.list_box:AddExistingItem(item)
+end
+
+function UITradingComputer:RefreshList()
+    self.entries = bind_trading_computer.get_trader_candidates(128) or {}
+    self.list_box:RemoveAll()
+    local last_id = nil
+    if bind_trading_computer and bind_trading_computer.get_last_selected_trader then
+        last_id = bind_trading_computer.get_last_selected_trader(self.object_id)
+    end
+    local selected_index = nil
+
+    for i = 1, #self.entries do
+        self:AddEntry(i, self.entries[i])
+        if last_id and tonumber(self.entries[i].id) == tonumber(last_id) then
+            selected_index = i - 1
+        end
+    end
+
+    if selected_index ~= nil then
+        pcall(function() self.list_box:SetSelectedIndex(selected_index) end)
+    end
+
+    self.count:SetText(format_localized(
+        "st_trading_computer_count",
+        "Traders found: %d",
+        #self.entries
+    ))
+    if #self.entries == 0 then
+        self.hint:SetText(localized_string("st_trading_computer_hint_no_traders", "No traders available."))
+    else
+        self.hint:SetText(localized_string("st_trading_computer_hint_select", "Select a trader and click Trade."))
+    end
+end
+
+function UITradingComputer:OpenSelected()
+    if self.list_box:GetSize() <= 0 then
+        return
+    end
+
+    local item = self.list_box:GetSelectedItem()
+    if not item or not item.trader_id then
+        return
+    end
+
+    if bind_trading_computer and bind_trading_computer.set_last_selected_trader then
+        bind_trading_computer.set_last_selected_trader(self.object_id, item.trader_id)
+    end
+    bind_trading_computer.open_trade_by_id(item.trader_id)
+    self:Close()
+end
+
+function UITradingComputer:TestAndShow(obj_id)
+    self.object_id = obj_id
+    self:RefreshList()
+    pcall(function()
+        if bind_trading_computer and bind_trading_computer.play_ui_startup_sound then
+            bind_trading_computer.play_ui_startup_sound()
+        end
+    end)
+    self:ShowDialog(true)
+    Register_UI("UITradingComputer", "ui_sleep_dialog")
+end
+
+function UITradingComputer:OnKeyboard(dik, keyboard_action)
+    local res = CUIScriptWnd.OnKeyboard(self, dik, keyboard_action)
+    if res == false and keyboard_action == ui_events.WINDOW_KEY_PRESSED and dik == DIK_keys.DIK_ESCAPE then
+        self:Close()
+    end
+    return res
+end
+
+function UITradingComputer:Close()
+    if self:IsShown() then
+        self:HideDialog()
+    end
+    Unregister_UI("UITradingComputer")
+end
+
+function start_dialog(obj_id)
+    if GUI == nil then
+        GUI = UITradingComputer()
+    end
+    GUI:TestAndShow(obj_id)
+end
+

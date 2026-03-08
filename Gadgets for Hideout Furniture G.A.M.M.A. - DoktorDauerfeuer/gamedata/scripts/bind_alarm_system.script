@@ -1,0 +1,269 @@
+local monster_classes = {
+    [clsid.bloodsucker_s]        = true,
+    [clsid.boar_s]               = true,
+    [clsid.dog_s]                = true,
+    [clsid.flesh_s]              = true,
+    [clsid.pseudodog_s]          = true,
+    [clsid.burer_s]              = true,
+    [clsid.cat_s]                = true,
+    [clsid.chimera_s]            = true,
+    [clsid.controller_s]         = true,
+    [clsid.fracture_s]           = true,
+    [clsid.poltergeist_s]        = true,
+    [clsid.gigant_s]             = true,
+    [clsid.zombie_s]             = true,
+    [clsid.snork_s]              = true,
+    [clsid.tushkano_s]           = true,
+    [clsid.psy_dog_s]            = true,
+    [clsid.psy_dog_phantom_s]    = true,
+}
+
+local ALARM_SCAN_INTERVAL = 1.0
+local RAY_FLAGS = rq_target.rqtObject + rq_target.rqtStatic + rq_target.rqtObstacle
+
+local function is_enemy_stalker_to_actor(o)
+    if not o or not db.actor then
+        return false
+    end
+
+    if o:clsid() ~= clsid.script_stalker then
+        return false
+    end
+
+    local ok_oid, oid = pcall(function() return o:id() end)
+    local ok_aid, aid = pcall(function() return db.actor:id() end)
+    if ok_oid and ok_aid and oid == aid then
+        return false
+    end
+
+    local ok, rel = pcall(function() return o:relation(db.actor) end)
+    return ok and rel == game_object.enemy
+end
+
+function toggle_alarm_system(obj_id)
+    local data = hf_obj_manager.get_data(obj_id) or {}
+    local is_on = data.is_on or false
+
+    hf_obj_manager.update_data(obj_id, { is_on = not is_on })
+end
+
+--------------------------------------------------------------------------------
+-- Init
+--------------------------------------------------------------------------------
+function init(obj)
+    obj:bind_object(alarm_system_wrapper(obj).binder)
+end
+
+--------------------------------------------------------------------------------
+-- Helper: detect player / NPCs / monsters
+--------------------------------------------------------------------------------
+
+local function get_bone_forward(obj, bone_name)
+    local bone_id = obj:bone_id(bone_name)
+    if not bone_id then
+        return nil
+    end
+
+    local m = obj:bone_transform(bone_id)
+    if not m then
+        return nil
+    end
+
+    local forward = vector()
+    forward:set(m.j)
+    forward:normalize()
+
+    return forward
+end
+
+local function get_target_center(o)
+    local p = o:position()
+    local center = vector():set(p)
+
+    if o:clsid() == clsid.script_stalker or o:clsid() == clsid.actor then
+        center.y = center.y + 1.2
+    else
+        center.y = center.y + 0.5
+    end
+
+    return center
+end
+
+local function is_in_front_of_bone(obj, bone_name, target_obj, min_dot)
+    local forward = get_bone_forward(obj, bone_name)
+    if not forward then
+        return false
+    end
+
+    local target_pos = get_target_center(target_obj)
+
+    local dir = vector()
+    dir:set(target_pos)
+    dir:sub(obj:position())
+    dir:normalize()
+
+    return forward:dotproduct(dir) >= min_dot
+end
+
+local function has_clear_los(alarm_obj, target_obj, target_pos, rp)
+    if not alarm_obj or not target_obj or not target_pos or not rp then
+        return false
+    end
+
+    local from = vector()
+    from:set(alarm_obj:position())
+
+    local dir = vector()
+    dir:set(target_pos)
+    dir:sub(from)
+
+    local dist = dir:magnitude()
+    if dist < 0.05 then
+        return true
+    end
+    dir:normalize()
+
+    rp:set_position(from)
+    rp:set_direction(dir)
+    rp:set_range(dist)
+    rp:set_flags(RAY_FLAGS)
+    rp:set_ignore_object(alarm_obj)
+    rp:query()
+
+    local hit_obj = rp:get_object()
+    if hit_obj then
+        local ok1, hid = pcall(function() return hit_obj:id() end)
+        local ok2, tid = pcall(function() return target_obj:id() end)
+        return ok1 and ok2 and hid == tid
+    end
+
+    local hit_dist = rp:get_distance()
+    return (not hit_dist) or hit_dist <= 0 or hit_dist >= (dist - 0.05)
+end
+
+local function alarm_has_targets(alarm_obj, radius, rp)
+    local pos = alarm_obj:position()
+    local min_dot = 0.2
+
+    for _, v in pairs(db.storage) do
+        if v and v.object then
+            local o = v.object
+            local cls = o:clsid()
+            local opos = o:position()
+
+            if opos:distance_to(pos) <= radius then
+                local is_target = false
+
+                if cls == clsid.script_stalker then
+                    is_target = is_enemy_stalker_to_actor(o)
+                elseif monster_classes[cls] then
+                    is_target = true
+                end
+
+                if is_target and o:alive() then
+                    local tpos = get_target_center(o)
+                    if is_in_front_of_bone(alarm_obj, "bone_led", o, min_dot) and has_clear_los(alarm_obj, o, tpos, rp) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+--------------------------------------------------------------------------------
+-- Class "alarm_system_wrapper"
+--------------------------------------------------------------------------------
+class "alarm_system_wrapper" (bind_hf_base.hf_binder_wrapper)
+
+function alarm_system_wrapper:__init(obj)
+    super(obj)
+
+    self.first_update = true
+    self.scan_t = 0
+    self.alarm_detected = false
+    self.rp = ray_pick()
+
+    self.snd_switch = sound_object([[gadgets_gamma_sounds\alarm_system_switch]])
+    self.snd_idle   = sound_object([[gadgets_gamma_sounds\alarm_system_alarm]])
+end
+
+--------------------------------------------------------------------------------
+-- Update
+--------------------------------------------------------------------------------
+function alarm_system_wrapper:update(delta)
+    bind_hf_base.hf_binder_wrapper.update(self, delta)
+
+    local dt = delta
+    if dt > 1.0 then dt = dt / 1000.0 end
+
+    local data = hf_obj_manager.get_data(self.object:id()) or {}
+    local is_on = data.is_on or false
+
+    local pos = self.object:position()
+
+    self.scan_t = (self.scan_t or 0) - dt
+    if self.scan_t <= 0 then
+        self.scan_t = ALARM_SCAN_INTERVAL
+        self.alarm_detected = is_on and alarm_has_targets(self.object, 5, self.rp) or false
+    end
+
+    local alarm_detected = self.alarm_detected or false
+
+    if self.first_update then
+        self.last_state    = is_on
+        self.last_detected = alarm_detected
+        self.first_update  = false
+        return
+    end
+
+    if self.last_state ~= is_on then
+        self.snd_switch:play_no_feedback(
+            self.object,
+            sound_object.s3d,
+            0,
+            pos,
+            1,
+            random_float(0.9, 1.1)
+        )
+    end
+
+    if is_on and alarm_detected then
+        if not self.snd_idle:playing() then
+            self.snd_idle:play_at_pos(
+                self.object,
+                pos,
+                0,
+                sound_object.s3d + sound_object.looped
+            )
+            self.snd_idle.volume = 1
+        end
+    else
+        if self.snd_idle:playing() then
+            self.snd_idle:stop()
+        end
+    end
+
+    self.object:set_bone_visible("bone_led", is_on, false, false)
+
+    self.last_state    = is_on
+    self.last_detected = alarm_detected
+end
+
+--------------------------------------------------------------------------------
+-- Destroy
+--------------------------------------------------------------------------------
+
+function alarm_system_wrapper:net_destroy()
+    if self.snd_idle and self.snd_idle:playing() then
+        self.snd_idle:stop()
+    end
+
+    if self.snd_switch and self.snd_switch:playing() then
+        self.snd_switch:stop()
+    end
+
+    bind_hf_base.hf_binder_wrapper.net_destroy(self)
+end
