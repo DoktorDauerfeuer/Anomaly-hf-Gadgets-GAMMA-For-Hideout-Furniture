@@ -104,7 +104,7 @@ function UITradingComputer:InitControls()
     self.title = xml:InitTextWnd("title", self.back)
     self.hint = xml:InitTextWnd("hint", self.back)
     self.count = xml:InitTextWnd("count", self.back)
-    xml:InitFrame("list_frame", self.back)
+    self.list_frame = xml:InitFrame("list_frame", self.back)
 
     self.list_box = xml:InitListBox("list", self.back)
     self.list_box:ShowSelectedItem(true)
@@ -124,6 +124,39 @@ function UITradingComputer:InitControls()
     pcall(function() self.btn_open:SetText(localized_string("st_trading_computer_btn_trade", "Trade")) end)
     pcall(function() self.btn_refresh:SetText(localized_string("st_trading_computer_btn_refresh", "Refresh")) end)
     pcall(function() self.btn_close:SetText(localized_string("st_trading_computer_btn_close", "Close")) end)
+end
+
+
+function UITradingComputer:ApplyNormalLayout()
+    self.list_box:Show(true)
+    if self.list_frame then
+        self.list_frame:Show(true)
+    end
+    self.count:Show(true)
+    self.btn_open:Show(true)
+    self.btn_refresh:Show(true)
+    self.btn_close:Show(true)
+    self.hint:Show(true)
+end
+
+function UITradingComputer:ApplyNoConnectionLayout()
+    self.list_box:Show(false)
+    if self.list_frame then
+        self.list_frame:Show(false)
+    end
+    self.count:Show(false)
+    self.btn_open:Show(false)
+    self.btn_refresh:Show(false)
+    self.btn_close:Show(true)
+    self.hint:Show(true)
+    self.hint:SetText("Connection lost.")
+end
+
+function UITradingComputer:ShowNoConnection(obj_id)
+    self.object_id = obj_id
+    self:ApplyNoConnectionLayout()
+    self:ShowDialog(true)
+    Register_UI("UITradingComputer", "ui_sleep_dialog")
 end
 
 function UITradingComputer:InitCallbacks()
@@ -222,6 +255,7 @@ end
 
 function UITradingComputer:TestAndShow(obj_id)
     self.object_id = obj_id
+    self:ApplyNormalLayout()
     self:RefreshList()
     pcall(function()
         if bind_trading_computer and bind_trading_computer.play_ui_startup_sound then
@@ -251,6 +285,16 @@ function start_dialog(obj_id)
     if GUI == nil then
         GUI = UITradingComputer()
     end
-    GUI:TestAndShow(obj_id)
+    local blocked = false
+    if bind_trading_computer and bind_trading_computer.is_connection_blocked then
+        blocked = bind_trading_computer.is_connection_blocked() == true
+    end
+    if blocked then
+        GUI:ShowNoConnection(obj_id)
+    else
+        GUI:TestAndShow(obj_id)
+    end
 end
+
+
 

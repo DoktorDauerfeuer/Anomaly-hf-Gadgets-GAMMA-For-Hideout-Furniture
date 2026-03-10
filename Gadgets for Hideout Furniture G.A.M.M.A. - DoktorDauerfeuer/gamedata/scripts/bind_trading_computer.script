@@ -3,6 +3,7 @@ local UI_STARTUP_SND = [[gadgets_gamma_sounds\trading_computer_startup]]
 local ui_startup_sound = sound_object(UI_STARTUP_SND)
 local TRADE_UI_REFRESH_EVENT_NS = "hf_trading_computer_ui"
 local TRADE_UI_REFRESH_DELAY_SEC = 1.0 -- Adjustable delay for post-trade inventory refresh.
+local MAX_TRADER_DISTANCE = 150.0 -- Meters; set to nil to disable range limit.
 
 local function get_data(obj_id)
     if not obj_id or not hf_obj_manager then
@@ -78,6 +79,41 @@ local function can_open_inventory_hud()
         return hide_hud_inventory()
     end
     return true
+end
+
+
+local function is_emission_or_psi_storm()
+    local function safe_call(fn)
+        local ok, res = pcall(fn)
+        return ok and res == true
+    end
+
+    if xr_conditions then
+        if xr_conditions.surge_started and safe_call(xr_conditions.surge_started) then
+            return true
+        end
+        if xr_conditions.psi_storm_started and safe_call(xr_conditions.psi_storm_started) then
+            return true
+        end
+    end
+
+    if surge_manager then
+        if surge_manager.is_started and safe_call(surge_manager.is_started) then
+            return true
+        end
+        if surge_manager.SurgeManager and surge_manager.SurgeManager.started then
+            local ok = safe_call(function() return surge_manager.SurgeManager:started() end)
+            if ok then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+function is_connection_blocked()
+    return is_emission_or_psi_storm()
 end
 
 local function is_enemy_to_actor(npc, actor)
@@ -399,6 +435,12 @@ local function collect_trader_candidates(actor, max_count)
         if not id or seen[id] then
             return
         end
+        if dist ~= nil then
+            dist = tonumber(dist)
+        end
+        if MAX_TRADER_DISTANCE and dist and dist < math.huge and dist > MAX_TRADER_DISTANCE then
+            return
+        end
         seen[id] = true
         out[#out + 1] = {
             id = id,
@@ -414,7 +456,7 @@ local function collect_trader_candidates(actor, max_count)
             local ok_dist, dist = pcall(function()
                 return obj:position():distance_to(actor_pos)
             end)
-            add_candidate(id, obj, ok_dist and dist or math.huge)
+            add_candidate(id, obj, ok_dist and dist or nil)
         end
     end
 
@@ -427,14 +469,10 @@ local function collect_trader_candidates(actor, max_count)
             if se_obj and id ~= actor:id() and is_se_trader(se_obj) then
                 local obj = get_online_object(id)
                 if obj and is_valid_trader(obj) then
-                    local dist = math.huge
                     local ok_dist, d = pcall(function()
                         return obj:position():distance_to(actor_pos)
                     end)
-                    if ok_dist and d then
-                        dist = d
-                    end
-                    add_candidate(id, obj, dist)
+                    add_candidate(id, obj, ok_dist and d or nil)
                 end
             end
         end
@@ -531,3 +569,6 @@ class "trading_computer_wrapper" (bind_hf_base.hf_binder_wrapper)
 function trading_computer_wrapper:__init(obj)
     super(obj)
 end
+
+
+
