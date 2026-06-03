@@ -14,7 +14,9 @@
 	<string id="st_artifact_harvester_descr">
 		<text>A device to harvest different artifacts for resources. Artifacts loose condition while generating resources. \n \n
 			%c[ui_white]PROPERTIES:\n
-			%c[d_orange] • %c[ui_white] Placeable\n</text>
+			%c[d_orange] • %c[ui_white] Placeable\n
+			%c[d_orange] • %c[ui_white] Compatible artefacts: Anomalous Bread, Bubble, Crystal, Death Lamp, Fireball, Flame, Gravi, Meat Chunk, Pin, Snowflake, Sponge\n
+			</text>
 	</string>
 	<string id="st_pegboard">
 		<text>Weapon pegboard</text>

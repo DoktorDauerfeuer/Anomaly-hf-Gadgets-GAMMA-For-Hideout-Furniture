@@ -4,38 +4,38 @@ artefact_item_generation = {
     ["af_sponge"] = { "flask" },
     ["af_pin"] = { "prt_i_wood" },
     ["af_gravi"] = { "prt_i_fasteners", "prt_i_scrap" },
-    ["af_bubble"] = { "vodka", "vodka", "vodka", "vodka2", "vodka2", "vodka2", "bottle_metal", "bottle_metal", "vodka_quality", "tea" },
-    ["af_crystall"] = { "prt_i_copper", "prt_i_transistors", "prt_i_resistors", "prt_i_capacitors" },
+    ["af_baloon"] = { "vodka", "vodka", "vodka", "vodka2", "vodka2", "vodka2", "bottle_metal", "bottle_metal", "vodka_quality", "tea" },
+    ["af_cristall"] = { "prt_i_copper", "prt_i_transistors", "prt_i_resistors", "prt_i_capacitors" },
     ["af_fire"] = { "powder_1", "powder_1", "powder_1", "powder_2", "powder_2", "powder_3" },
     ["af_fireball"] = { "bullet_r7", "bullet_r7", "bullet_r7_ap", "bullet_r5", "bullet_r5", "bullet_r5_ap", "bullet_pistol", "bullet_pistol", "bullet_pistol_ap", "bullet_shotgun", "bullet_shotgun", "bullet_shotgun_ap" },
     ["af_misery_bread"] = { "bread" },
-    ["af_death_lamp"] = { "af_vyvert", "af_empty", "af_full_empty", "af_pin", "af_crystall", "af_lobster_eyes", "af_fireball", "af_gravi", "af_gold_fish", "af_ring", "af_electra_moonlight", "af_sponge", "af_electra_flash", "af_ice", "af_eye", "af_fire", "af_baloon", "af_fuzz_kolobok", "af_glass", "af_dummy_dummy", "af_black_spray", "af_bat", "af_serofim" },
+    ["af_death_lamp"] = { "af_vyvert", "af_empty", "af_full_empty", "af_pin", "af_cristall", "af_lobster_eyes", "af_fireball", "af_gravi", "af_gold_fish", "af_ring", "af_electra_moonlight", "af_sponge", "af_electra_flash", "af_ice", "af_eye", "af_fire", "af_baloon", "af_fuzz_kolobok", "af_glass", "af_dummy_dummy", "af_black_spray", "af_bat", "af_serofim" },
 }
 
 artefact_item_generation_hours = {
     ["af_mincer_meat"] = 4,
-    ["af_ice"] = 12,
-    ["af_sponge"] = 12,
+    ["af_ice"] = 6,
+    ["af_sponge"] = 6,
     ["af_pin"] = 2,
-    ["af_gravi"] = 2,
-    ["af_bubble"] = 12,
-    ["af_crystall"] = 6,
-    ["af_fire"] = 2,
-    ["af_fireball"] = 2,
+    ["af_gravi"] = 1,
+    ["af_baloon"] = 6,
+    ["af_cristall"] = 6,
+    ["af_fire"] = 3,
+    ["af_fireball"] = 3,
     ["af_misery_bread"] = 24,
-    ["af_death_lamp"] = 48,
+    ["af_death_lamp"] = 24,
 }
 
 artefact_item_generation_degradation_per_hour = {
-    ["af_mincer_meat"] = 0.2,
+    ["af_mincer_meat"] = 0.028,
     ["af_ice"] = 0.014,
     ["af_sponge"] = 0.014,
-    ["af_pin"] = 0.1,
-    ["af_gravi"] = 0.1,
-    ["af_bubble"] = 0.014,
-    ["af_crystall"] = 0.1,
-    ["af_fire"] = 0.1,
-    ["af_fireball"] = 0.1,
+    ["af_pin"] = 0.014,
+    ["af_gravi"] = 0.014,
+    ["af_baloon"] = 0.014,
+    ["af_cristall"] = 0.014,
+    ["af_fire"] = 0.014,
+    ["af_fireball"] = 0.014,
     ["af_misery_bread"] = nil,
     ["af_death_lamp"] = nil,
 }
@@ -976,11 +976,11 @@ function artifact_harvester_wrapper:apply_display_number(value, powered)
 
         local tens = math.floor(n / 10)
         local ones = n % 10
-        self.object:set_shader(DIGIT_MESH_TENS, [[models\lightplanes]], digit_texture(tens))
-        self.object:set_shader(DIGIT_MESH_ONES, [[models\lightplanes]], digit_texture(ones))
-    else
-        self.object:set_shader(DIGIT_MESH_TENS, [[models\model]], TEX_OFF)
-        self.object:set_shader(DIGIT_MESH_ONES, [[models\model]], TEX_OFF)
+--        self.object:set_shader(DIGIT_MESH_TENS, [[models\lightplanes]], digit_texture(tens))
+--       self.object:set_shader(DIGIT_MESH_ONES, [[models\lightplanes]], digit_texture(ones))
+--    else
+--        self.object:set_shader(DIGIT_MESH_TENS, [[models\model]], TEX_OFF)
+--        self.object:set_shader(DIGIT_MESH_ONES, [[models\model]], TEX_OFF)
     end
 end
 
